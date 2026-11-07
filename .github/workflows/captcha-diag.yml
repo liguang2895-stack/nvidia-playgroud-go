@@ -1,0 +1,26 @@
+name: captcha-diag
+
+on:
+  workflow_dispatch:
+
+jobs:
+  captchapow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Runner egress IP
+        run: curl -s https://www.cloudflare.com/cdn-cgi/trace | grep -E "^(ip|loc)=" || true
+
+      - name: PoW solve - direct (Azure datacenter IP), attempt 1
+        run: go run ./cmd/captchapow -v
+        timeout-minutes: 5
+
+      - name: PoW solve - attempt 2 (30s later)
+        run: sleep 30 && go run ./cmd/captchapow -v
+        timeout-minutes: 5
