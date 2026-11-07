@@ -77,6 +77,16 @@ func main() {
 	catalogCookie := flag.String("catalog-cookie", "", "Cookie header (e.g. aws-waf-token=...) for the filtered build.nvidia.com model catalog; exported from a browser that passed the AWS WAF challenge")
 	flag.Parse()
 
+	// Platform deployments (Railway, PaaS) inject the listening port via PORT;
+	// honor it unless -addr was given explicitly.
+	if !isFlagPassed("addr") {
+		if p := strings.TrimSpace(os.Getenv("PORT")); p != "" {
+			if n, err := strconv.Atoi(p); err == nil && n > 0 && n < 65536 {
+				*addr = ":" + strconv.Itoa(n)
+			}
+		}
+	}
+
 	if !*auto && *captchaFlag == "" {
 		log.Print("warning: no -auto/-captcha; each request must send nv-captcha-token")
 	}
@@ -259,6 +269,8 @@ func main() {
 		WithConfigPath(cfgPath).
 		WithCoreAuthManager(core).
 		WithServerOptions(
+			// Optional API key gate (API_KEY env); runs before any body parsing.
+			api.WithMiddleware(apiKeyMiddleware()),
 			// Splits "<function-id>@<model>" bodies into a plain model id plus the
 			// nv-function-id header before cliproxy routes the request by model.
 			api.WithMiddleware(functionPinMiddleware()),
@@ -303,6 +315,17 @@ func main() {
 	if err := svc.Run(ctx); err != nil && ctx.Err() == nil {
 		log.Fatal(err)
 	}
+}
+
+// isFlagPassed reports whether the named flag was set on the command line.
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 // bypassHostProxy wraps pf so that requests to the given base URL (matched

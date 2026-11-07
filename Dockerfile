@@ -37,4 +37,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
 	CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
 
 ENTRYPOINT ["serve"]
-CMD ["-auto", "-addr", ":8080"]
+# -auto enables the captcha PoW token pool. The port comes from the PORT env
+# (injected by Railway and friends); omit it to keep the default :8080.
+CMD ["-auto"]
