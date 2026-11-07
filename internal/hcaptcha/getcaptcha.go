@@ -650,6 +650,16 @@ func runEncryptedAttempt(ctx context.Context, sitekey, host string, claim *claim
 			at.Err = fmt.Errorf("hcaptcha: getcaptcha: marshal decoded response: %w", jerr)
 			return
 		}
+		// A passcode wins: hCaptcha now answers successful solves with BOTH the
+		// P1_ token and a prewarm challenge "c" for the next solve, so the
+		// re-issued check must only run when no passcode is present — otherwise
+		// every real token is mistaken for a rejected proof and re-solved until
+		// the round cap fails the attempt.
+		if at.Token = FindP1Token(j); at.Token != "" {
+			return
+		}
+		// No passcode: a fresh "c" here is the server's answer to a rejected
+		// proof — follow the re-issue ladder.
 		if spec2, jwt2, ctype2, ok := reissuedChallenge(j); ok {
 			if ctype2 != "" && ctype2 != "hsw" {
 				at.Err = fmt.Errorf("hcaptcha: getcaptcha: server re-issued %q challenge (not solvable via PoW)", ctype2)
@@ -658,10 +668,7 @@ func runEncryptedAttempt(ctx context.Context, sitekey, host string, claim *claim
 			spec, jwt = spec2, jwt2
 			continue
 		}
-		at.Token = FindP1Token(j)
-		if at.Token == "" {
-			at.Err = fmt.Errorf("hcaptcha: getcaptcha: encrypted response carries no passcode: %s", clipBytes(j))
-		}
+		at.Err = fmt.Errorf("hcaptcha: getcaptcha: encrypted response carries no passcode: %s", clipBytes(j))
 		return
 	}
 	at.Err = fmt.Errorf("hcaptcha: getcaptcha: server re-issued a fresh challenge %d times (proof kept being rejected)", maxEncryptedRounds)
