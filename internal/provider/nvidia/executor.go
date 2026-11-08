@@ -443,6 +443,7 @@ func (e *Executor) doPredict(ctx context.Context, info models.ModelInfo, body []
 		}
 		upResp, err = e.httpClient.Do(upReq)
 		if err != nil {
+			log.Printf("upstream do error: %v (request body=%d bytes)", err, len(body))
 			cleanup()
 			return nil, nil, &coreauth.Error{
 				Code:       "upstream_error",
@@ -464,8 +465,8 @@ func (e *Executor) doPredict(ctx context.Context, info models.ModelInfo, body []
 
 		retryable := isRetryableCaptchaFailure(status, raw)
 		if retryable && attempt < maxAttempts {
-			log.Printf("upstream captcha failure status=%d (attempt %d/%d); fetching a fresh token",
-				status, attempt, maxAttempts)
+			log.Printf("upstream captcha failure status=%d (attempt %d/%d) body=%.400s; fetching a fresh token",
+				status, attempt, maxAttempts, raw)
 			continue
 		}
 		if retryable {
@@ -479,6 +480,7 @@ func (e *Executor) doPredict(ctx context.Context, info models.ModelInfo, body []
 		if msg == "" {
 			msg = "upstream request failed"
 		}
+		log.Printf("upstream failure status=%d (request body=%d bytes) body=%.400s", status, len(body), msg)
 		return nil, nil, &coreauth.Error{
 			Code:       "upstream_error",
 			Message:    msg,
@@ -518,6 +520,7 @@ func (e *Executor) acquireInflight(ctx context.Context) (release func(), err err
 	case <-timer.C:
 		return nil, fmt.Errorf("max in-flight upstream streams reached; retry later")
 	case <-ctx.Done():
+		log.Printf("inflight: client cancelled while %d/%d upstream slots busy", len(e.inflight), cap(e.inflight))
 		return nil, fmt.Errorf("client cancelled before a stream slot opened")
 	}
 }

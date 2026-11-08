@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -87,6 +88,7 @@ func functionPinMiddleware() gin.HandlerFunc {
 		if cerr := req.Body.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
+		log.Printf("chat request %s: %d bytes", req.URL.Path, len(raw))
 		if err != nil {
 			// Partial read: hand back what arrived and let the handler report it.
 			req.Body = io.NopCloser(bytes.NewReader(raw))
