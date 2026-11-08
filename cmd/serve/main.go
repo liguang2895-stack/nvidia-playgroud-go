@@ -104,11 +104,16 @@ func main() {
 		proxyFunc = http.ProxyURL(u)
 		log.Printf("upstream proxy=%s (PoW solver + catalog; predict API direct)", proxyURL)
 	}
-	// Predict requests to the NVIDIA gateway are latency-sensitive and reachable
-	// without the proxy: always connect to buildapi.ngc.nvidia.com directly,
-	// while hCaptcha PoW solving, the model-catalog scraper, and WAF token
-	// minting keep routing through the proxy.
-	proxyFunc = bypassHostProxy(proxyFunc, models.PredictBase)
+	// Predict requests to the NVIDIA gateway are latency-sensitive: by default
+	// they dial buildapi.ngc.nvidia.com directly while hCaptcha PoW solving,
+	// the model-catalog scraper, and WAF token minting route through the proxy.
+	// Datacenter egress IPs get soft-blocked by the upstream risk engine under
+	// sustained agent load (fast 503s with freshly reaped tokens), so setting
+	// PREDICT_PROXY=1 keeps predict on the proxy exit as well — trading a bit
+	// of latency for a residential IP.
+	if os.Getenv("PREDICT_PROXY") != "1" {
+		proxyFunc = bypassHostProxy(proxyFunc, models.PredictBase)
+	}
 
 	transport := &http.Transport{
 		Proxy: proxyFunc,
